@@ -5,14 +5,14 @@ package.name = pythonmonitor
 package.domain = org.xiaoliang
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas
-version = 1.0
+version = 2.0
 
 requirements = python3,kivy
 
 orientation = portrait
 fullscreen = 0
 
-# ★ 权限：API 33 必须用 MANAGE_EXTERNAL_STORAGE 才能读 /sdcard/
+# API 33 必须用 MANAGE_EXTERNAL_STORAGE
 android.permissions = MANAGE_EXTERNAL_STORAGE
 
 android.api = 33
@@ -20,10 +20,10 @@ android.minapi = 21
 android.ndk = 25b
 android.ndk_api = 21
 
-# ★ 锁定 build-tools 到 33.0.2（最后一个包含 aidl 的版本）
+# 锁定 build-tools（最后一个包含 aidl 的版本）
 android.build_tools_version = 33.0.2
 
-# ★ CI 必须：自动接受 SDK 许可证
+# CI 自动接受许可证
 android.accept_sdk_license = True
 
 android.archs = arm64-v8a
