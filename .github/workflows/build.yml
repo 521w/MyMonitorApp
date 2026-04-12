@@ -23,14 +23,20 @@ jobs:
         pip install --upgrade pip
         pip install cython buildozer
 
-    - name: Install Android SDK + AIDL
+    - name: Install Android SDK manually
       run: |
-        sudo apt install -y android-sdk
-        sudo apt install -y aidl
-        echo "export PATH=$PATH:/usr/lib/android-sdk/build-tools/33.0.0" >> $GITHUB_ENV
-        echo "export PATH=$PATH:/usr/lib/android-sdk/platform-tools" >> $GITHUB_ENV
+        mkdir -p $HOME/android-sdk
+        cd $HOME/android-sdk
+        wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+        unzip commandlinetools-linux-9477386_latest.zip -d cmdline-tools
+        mkdir -p cmdline-tools/latest
+        mv cmdline-tools/* cmdline-tools/latest/ || true
+        yes | cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk "platform-tools" "platforms;android-33" "build-tools;33.0.0" "cmdline-tools;latest"
 
-    - name: First build (downloads SDK/NDK)
+        echo "ANDROIDSDK=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "PATH=$PATH:$HOME/android-sdk/platform-tools:$HOME/android-sdk/build-tools/33.0.0" >> $GITHUB_ENV
+
+    - name: First build (downloads NDK)
       run: |
         buildozer android debug || true
 
