@@ -14,7 +14,6 @@ class ToolboxTab(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(orientation='vertical', padding=6, spacing=4, **kwargs)
 
-        # 工具按钮区
         tool_grid = BoxLayout(size_hint_y=None, height=90, spacing=4,
                               orientation='vertical')
 
@@ -26,7 +25,8 @@ class ToolboxTab(BoxLayout):
         ]
         for label, callback in tools_r1:
             btn = IconButton(
-                text=label, background_color=T.BTN_PRIMARY,
+                text=label,
+                background_color=T.BTN_PRIMARY,
                 size_hint_x=1.0 / len(tools_r1),
             )
             btn.bind(on_press=lambda x, cb=callback: cb())
@@ -41,7 +41,8 @@ class ToolboxTab(BoxLayout):
         ]
         for label, callback in tools_r2:
             btn = IconButton(
-                text=label, background_color=T.BTN_NEUTRAL,
+                text=label,
+                background_color=T.BTN_NEUTRAL,
                 size_hint_x=1.0 / len(tools_r2),
             )
             btn.bind(on_press=lambda x, cb=callback: cb())
@@ -51,38 +52,40 @@ class ToolboxTab(BoxLayout):
 
         self.add_widget(Divider())
 
-        # Ping 工具
         ping_bar = BoxLayout(size_hint_y=None, height=44, spacing=4)
         self.ping_input = TextInput(
             hint_text="输入地址 Ping 测试（如 baidu.com）",
-            size_hint_x=0.65, multiline=False, font_size=T.FONT_MD,
+            size_hint_x=0.65,
+            multiline=False,
+            font_size=T.FONT_MD,
             background_color=T.BG_INPUT,
             foreground_color=T.TEXT_PRIMARY,
             hint_text_color=T.TEXT_DIM,
         )
         self.ping_input.bind(on_text_validate=lambda x: self.do_ping())
         ping_bar.add_widget(self.ping_input)
+
         pb = IconButton(
-            icon="▶", text="Ping",
-            size_hint_x=0.35, background_color=T.BTN_SUCCESS,
+            icon="▶",
+            text="Ping",
+            size_hint_x=0.35,
+            background_color=T.BTN_SUCCESS,
         )
         pb.bind(on_press=lambda x: self.do_ping())
         ping_bar.add_widget(pb)
         self.add_widget(ping_bar)
 
-        # 输出区域
         self.scroll = ScrollLabel(font_size=T.FONT_SM)
         self.scroll.text = (
             f"[color={T.ACCENT_HEX}]"
             f"┌─ 工具箱 ──────────────────┐\n"
-            f"│  点击上方按钮使用各种工具    │\n"
-            f"│  输入地址可进行 Ping 测试    │\n"
+            f"│ 点击上方按钮使用各种工具 │\n"
+            f"│ 输入地址可进行 Ping 测试 │\n"
             f"└──────────────────────────┘"
             f"[/color]"
         )
         self.add_widget(self.scroll)
 
-        # 底部快捷操作
         bottom = BoxLayout(size_hint_y=None, height=38, spacing=3)
         quick_ops = [
             ("截屏", self.screenshot),
@@ -107,17 +110,17 @@ class ToolboxTab(BoxLayout):
 
     def device_info(self):
         cmds = [
-            "echo '设备型号:  '$(getprop ro.product.model)",
-            "echo '制造商:    '$(getprop ro.product.manufacturer)",
-            "echo '品牌:      '$(getprop ro.product.brand)",
-            "echo 'Android:   '$(getprop ro.build.version.release)",
-            "echo 'SDK:       '$(getprop ro.build.version.sdk)",
-            "echo '安全补丁:  '$(getprop ro.build.version.security_patch)",
-            "echo '构建号:    '$(getprop ro.build.display.id)",
-            "echo '处理器:    '$(getprop ro.product.board)",
-            "echo 'ABI:       '$(getprop ro.product.cpu.abi)",
-            "echo '序列号:    '$(getprop ro.serialno)",
-            "echo '蓝牙名称:  '$(getprop net.bt.name)",
+            "echo '设备型号: '$(getprop ro.product.model)",
+            "echo '制造商: '$(getprop ro.product.manufacturer)",
+            "echo '品牌: '$(getprop ro.product.brand)",
+            "echo 'Android: '$(getprop ro.build.version.release)",
+            "echo 'SDK: '$(getprop ro.build.version.sdk)",
+            "echo '安全补丁: '$(getprop ro.build.version.security_patch)",
+            "echo '构建号: '$(getprop ro.build.display.id)",
+            "echo '处理器: '$(getprop ro.product.board)",
+            "echo 'ABI: '$(getprop ro.product.cpu.abi)",
+            "echo '序列号: '$(getprop ro.serialno)",
+            "echo '蓝牙名称: '$(getprop net.bt.name)",
         ]
         self._show("设备信息", " && ".join(cmds))
 
@@ -144,85 +147,61 @@ class ToolboxTab(BoxLayout):
     def list_apps(self):
         self._show(
             "已装应用（前30个）",
-            "pm list packages -3 to_bottom())
-        bb.add_widget(sb2)
-        self.add_widget(bb)
+            "pm list packages -3 2>/dev/null | head -30 | sed 's/package://g'",
+        )
 
-        self.paused = False
-        self.filter_on = False
-        self.last_mt = 0
-        Clock.schedule_interval(self.update, 0.5)
+    def hw_info(self):
+        cmds = [
+            "echo '── CPU ──'",
+            "cat /proc/cpuinfo | grep -E 'model name|Hardware|processor' | head -8",
+            "echo ''",
+            "echo '── 内存 ──'",
+            "cat /proc/meminfo | head -4",
+            "echo ''",
+            "echo '── 内核 ──'",
+            "uname -a",
+        ]
+        self._show("硬件信息", " && ".join(cmds))
 
-    def toggle_pause(self, *args):
-        self.paused = not self.paused
-        if self.paused:
-            self.pbtn.text = "▶ 继续"
-            self.pbtn.background_color = T.BTN_WARN
-        else:
-            self.pbtn.text = "⏸ 暂停"
-            self.pbtn.background_color = T.BTN_PRIMARY
-
-    def toggle_filter(self, *args):
-        self.filter_on = not self.filter_on
-        if self.filter_on:
-            self.fbtn.text = "● 过滤:开"
-            self.fbtn.background_color = T.BTN_SUCCESS
-        else:
-            self.fbtn.text = "◯ 过滤:关"
-            self.fbtn.background_color = T.BTN_NEUTRAL
-        self.last_mt = 0
-
-    def update(self, dt):
-        if self.paused:
+    def do_ping(self):
+        addr = self.ping_input.text.strip()
+        if not addr:
+            self.scroll.text = (
+                f"[color={T.ACCENT_HEX}]请输入要 Ping 的地址[/color]"
+            )
             return
-        try:
-            if not os.path.exists(LOG_PATH):
-                self.scroll.text = (
-                    f"[color={T.YELLOW_HEX}]日志文件不存在[/color]\n"
-                    f"路径：{esc(LOG_PATH)}"
-                )
-                self.status.text = f"[color={T.YELLOW_HEX}]◇ 文件未找到[/color]"
-                return
+        self._show(
+            f"Ping {addr}",
+            f"ping -c 4 -W 3 {addr} 2>&1",
+            root=False,
+            timeout=15,
+        )
 
-            st = os.stat(LOG_PATH)
-            if st.st_mtime == self.last_mt:
-                return
-            self.last_mt = st.st_mtime
+    def screenshot(self):
+        self._show(
+            "截屏",
+            "screencap -p /sdcard/screenshot_pm.png && echo '已保存到 /sdcard/screenshot_pm.png'",
+        )
 
-            lines = tail_read(LOG_PATH, MAX_LINES)
-            if not lines:
-                self.scroll.text = "[color=888888]日志文件为空[/color]"
-                return
+    def clear_cache(self):
+        self._show(
+            "清理缓存",
+            "pm trim-caches 500M 2>/dev/null && echo '缓存清理完成' || echo '需要 Root 权限'",
+        )
 
-            kw = self.search.text.strip()
-            if self.filter_on and kw:
-                lines = [l for l in lines if kw.lower() in l.lower()]
+    def dns_lookup(self):
+        cmds = [
+            "echo '── 当前 DNS ──'",
+            "getprop net.dns1",
+            "getprop net.dns2",
+            "echo ''",
+            "echo '── DNS 解析测试 ──'",
+            "nslookup baidu.com 2>/dev/null | head -6 || echo 'nslookup 不可用'",
+        ]
+        self._show("DNS 查询", " && ".join(cmds))
 
-            display = []
-            for line in lines:
-                line = line.rstrip('\n\r')
-                safe = esc(line)
-                colored = colorize(safe)
-                if kw and kw.lower() in line.lower():
-                    colored = f"[color=00ffff]▸[/color] {colored}"
-                display.append(colored)
-
-            self.scroll.text = '\n'.join(display)
-
-            t = time.strftime("%H:%M:%S", time.localtime(st.st_mtime))
-            sz = format_size(st.st_size)
-            fi = f" | 过滤后 {len(display)} 行" if (self.filter_on and kw) else ""
-            self.status.text = (
-                f"[color={T.ACCENT_HEX}]◇ {sz} | "
-                f"{len(lines)} 行{fi} | {t}[/color]"
-            )
-            self.scroll.scroll_to_bottom()
-        except PermissionError:
-            self.scroll.text = (
-                f"[color={T.RED_HEX}]权限不足，请授权文件访问[/color]"
-            )
-        except Exception as e:
-            log_crash(f"日志查看: {traceback.format_exc()}")
-            self.scroll.text = (
-                f"[color={T.RED_HEX}]出错: {esc(str(e))}[/color]"
-            )
+    def open_ports(self):
+        self._show(
+            "开放端口",
+            "netstat -tlnp 2>/dev/null | head -20 || ss -tlnp 2>/dev/null | head -20 || echo '端口查询不可用'",
+        )
