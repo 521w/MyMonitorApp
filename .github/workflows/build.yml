@@ -7,58 +7,67 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - uses: actions/setup-java@v4
-      with:
-        distribution: temurin
-        java-version: '17'
+      # 修复：如果 tabs 目录名带空格就重命名
+      - name: Fix directory name
+        run: |
+          if [ -d " tabs" ]; then
+            mv " tabs" tabs
+            echo "已修复：' tabs' -> 'tabs'"
+          fi
+          # 删除多余文件
+          rm -f tabs.process.py
 
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
-    - name: Cache Buildozer
-      uses: actions/cache@v4
-      with:
-        path: .buildozer
-        key: buildozer-v3-${{ hashFiles('buildozer.spec') }}
-        restore-keys: buildozer-v3-
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    - name: Install Android SDK Platform 33
-      run: |
-        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-          "platforms;android-33" \
-          "build-tools;33.0.2" \
-          "platform-tools"
+      - name: Cache Buildozer
+        uses: actions/cache@v4
+        with:
+          path: .buildozer
+          key: buildozer-v5-${{ hashFiles('buildozer.spec') }}
+          restore-keys: buildozer-v5-
 
-    - name: Fix sdkmanager path for Buildozer
-      run: |
-        mkdir -p $ANDROID_HOME/tools/bin
-        ln -sf $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager $ANDROID_HOME/tools/bin/sdkmanager
-        ln -sf $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager $ANDROID_HOME/tools/bin/avdmanager
+      - name: Install Android SDK Platform 33
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "platforms;android-33" \
+            "build-tools;33.0.2" \
+            "platform-tools"
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          git zip unzip \
-          autoconf automake libtool pkg-config cmake \
-          zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 \
-          libffi-dev libssl-dev liblzma-dev \
-          build-essential ccache \
-          autopoint gettext
+      - name: Fix sdkmanager path for Buildozer
+        run: |
+          mkdir -p $ANDROID_HOME/tools/bin
+          ln -sf $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager $ANDROID_HOME/tools/bin/sdkmanager
+          ln -sf $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager $ANDROID_HOME/tools/bin/avdmanager
 
-    - name: Install buildozer
-      run: pip install buildozer cython==0.29.34
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip \
+            autoconf automake libtool pkg-config cmake \
+            zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 \
+            libffi-dev libssl-dev liblzma-dev \
+            build-essential ccache \
+            autopoint gettext
 
-    - name: Build APK
-      run: yes | buildozer -v android debug
+      - name: Install buildozer
+        run: pip install buildozer cython==0.29.34
 
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: MyMonitorApp
-        path: bin/*.apk
+      - name: Build APK
+        run: yes | buildozer -v android debug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyMonitorApp
+          path: bin/*.apk
