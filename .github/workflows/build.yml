@@ -10,15 +10,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 修复：如果 tabs 目录名带空格就重命名
       - name: Fix directory name
         run: |
           if [ -d " tabs" ]; then
             mv " tabs" tabs
-            echo "已修复：' tabs' -> 'tabs'"
+            echo "Fixed: ' tabs' -> 'tabs'"
           fi
-          # 删除多余文件
           rm -f tabs.process.py
+
+      - name: Download Chinese font
+        run: |
+          echo "Downloading Chinese font..."
+          wget -q "https://github.com/notofonts/noto-cjk/releases/download/Sans2.004/03_NotoSansCJKsc-Regular.otf" -O chinese.ttf && echo "Downloaded NotoSansCJKsc" || \
+          wget -q "https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@master/dist/zpix.ttf" -O chinese.ttf && echo "Downloaded zpix" || \
+          echo "WARNING: Could not download font, will rely on system fonts"
+          ls -la chinese.ttf 2>/dev/null || true
 
       - uses: actions/setup-java@v4
         with:
@@ -33,8 +39,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .buildozer
-          key: buildozer-v5-${{ hashFiles('buildozer.spec') }}
-          restore-keys: buildozer-v5-
+          key: buildozer-v6-${{ hashFiles('buildozer.spec') }}
+          restore-keys: buildozer-v6-
 
       - name: Install Android SDK Platform 33
         run: |
