@@ -5,7 +5,7 @@ import os
 import time
 
 # ============================================================
-# Android 权限（防崩溃）
+# Android 权限
 # ============================================================
 ANDROID = False
 try:
@@ -119,7 +119,17 @@ def format_size(size_bytes):
 
 
 def bar(pct, w=20):
-    """生成文本进度条"""
+    """生成美化文本进度条"""
     pct = max(0, min(100, pct))
-    f = int(pct / 100 * w)
-    return '=' * f + '-' * (w - f)
+    filled = int(pct / 100 * w)
+    return '█' * filled + '░' * (w - filled)
+
+
+def color_val(val, low=50, high=80):
+    """根据数值返回颜色 hex（绿/黄/红）"""
+    from theme import GREEN_HEX, YELLOW_HEX, RED_HEX
+    if val < low:
+        return GREEN_HEX
+    elif val < high:
+        return YELLOW_HEX
+    return RED_HEX
