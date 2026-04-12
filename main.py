@@ -1,5 +1,5 @@
 """
-Python Monitor v3.2 - Root 增强版（多文件结构）
+Python Monitor v3.3 - Root 增强版（多文件结构）
 """
 
 from kivy.app import App
@@ -11,7 +11,7 @@ import traceback
 from utils import request_android_perms, log_crash, CRASH_LOG
 from tabs import (
     SystemMonitorTab, ProcessTab, TerminalTab,
-    LogViewerTab, LogcatTab,
+    LogViewerTab, LogcatTab, ToolboxTab,
 )
 
 
@@ -29,6 +29,7 @@ class MonitorApp(App):
                 ("终端", TerminalTab()),
                 ("日志", LogViewerTab()),
                 ("系统", LogcatTab()),
+                ("工具", ToolboxTab()),
             ]
             for title, content in tabs:
                 tab = TabbedPanelItem(text=title, font_size="13sp")
