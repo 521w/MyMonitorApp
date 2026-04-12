@@ -1,6 +1,6 @@
 """
-Python Monitor v1.01 - Root Enhanced (Crash Fixed)
-5 Tabs: System Monitor / Process Manager / Root Terminal / Log Viewer / Logcat
+Python Monitor v3.1 - Root 增强版（全中文界面）
+5个标签页：系统监控 / 进程管理 / 终端 / 日志查看 / 系统日志
 """
 
 from kivy.app import App
@@ -19,7 +19,7 @@ import re
 import traceback
 
 # ============================================================
-# Android Permission (crash-safe)
+# Android 权限（防崩溃）
 # ============================================================
 ANDROID = False
 try:
@@ -30,7 +30,6 @@ except Exception:
 
 
 def request_android_perms():
-    """Request permissions safely - never crash"""
     if not ANDROID:
         return
     try:
@@ -47,7 +46,7 @@ def request_android_perms():
 
 
 # ============================================================
-# Crash Logger - writes to file so you can debug
+# 崩溃日志 - 闪退时写到文件方便排查
 # ============================================================
 CRASH_LOG = "/sdcard/pm_crash.log"
 
@@ -61,11 +60,10 @@ def log_crash(msg):
 
 
 # ============================================================
-# Utility Functions
+# 工具函数
 # ============================================================
 
 def run_cmd(cmd, root=False, timeout=5):
-    """Run a shell command, optionally as root via su"""
     try:
         if root:
             full_cmd = ['su', '-c', cmd]
@@ -78,11 +76,11 @@ def run_cmd(cmd, root=False, timeout=5):
         err = r.stderr.strip()
         return out if out else err if err else ""
     except subprocess.TimeoutExpired:
-        return "[timeout]"
+        return "[命令超时]"
     except FileNotFoundError:
-        return "[su not found - need root]"
+        return "[未找到 su - 需要 Root 权限]"
     except Exception as e:
-        return f"[error: {e}]"
+        return f"[错误: {e}]"
 
 
 def read_file_safe(path):
@@ -111,7 +109,6 @@ def tail_read(filepath, max_lines=500):
 
 
 def esc(text):
-    """Escape text for Kivy markup - brackets MUST stay escaped"""
     if not text:
         return ""
     return text.replace('&', '&amp;').replace('[', '&bl;').replace(']', '&br;')
@@ -133,7 +130,7 @@ def bar(pct, w=20):
 
 
 # ============================================================
-# Tab 1: System Monitor
+# 标签页 1：系统监控
 # ============================================================
 
 class SystemMonitorTab(BoxLayout):
@@ -143,7 +140,7 @@ class SystemMonitorTab(BoxLayout):
 
         scroll = ScrollView(size_hint=(1, 1))
         self.info = Label(
-            text="Loading...", size_hint_y=None,
+            text="正在加载...", size_hint_y=None,
             halign="left", valign="top",
             markup=True, font_size="14sp",
         )
@@ -161,7 +158,7 @@ class SystemMonitorTab(BoxLayout):
         self.add_widget(scroll)
 
         btn = Button(
-            text="Refresh", size_hint_y=None, height=48,
+            text="手动刷新", size_hint_y=None, height=48,
             font_size="14sp", background_color=(0.2, 0.5, 0.8, 1),
         )
         btn.bind(on_press=lambda x: self.update(0))
@@ -191,7 +188,7 @@ class SystemMonitorTab(BoxLayout):
             self.prev_cpu = s
             cc = "44ff44" if cpu < 50 else ("ffaa00" if cpu < 80 else "ff4444")
 
-            # Memory
+            # 内存
             mi = {}
             for line in read_file_safe('/proc/meminfo').split('\n'):
                 p = line.split()
@@ -203,16 +200,16 @@ class SystemMonitorTab(BoxLayout):
             mp = round(mu / mt * 100, 1) if mt > 0 else 0
             mc = "44ff44" if mp < 60 else ("ffaa00" if mp < 85 else "ff4444")
 
-            # Battery
+            # 电池
             bb = '/sys/class/power_supply/battery'
             bl = read_file_safe(f'{bb}/capacity') or '?'
             bs = read_file_safe(f'{bb}/status') or '?'
             bt_raw = read_file_safe(f'{bb}/temp')
             bt = f"{int(bt_raw) / 10:.1f}" if bt_raw.isdigit() else '?'
-            bs_cn = {'Charging': 'Charging', 'Discharging': 'Discharging',
-                     'Full': 'Full', 'Not charging': 'Idle'}.get(bs, bs)
+            bs_cn = {'Charging': '充电中', 'Discharging': '放电中',
+                     'Full': '已充满', 'Not charging': '未充电'}.get(bs, bs)
 
-            # CPU Temp
+            # CPU 温度
             ct = '?'
             for p in ['/sys/class/thermal/thermal_zone0/temp']:
                 v = read_file_safe(p)
@@ -221,48 +218,48 @@ class SystemMonitorTab(BoxLayout):
                     ct = f"{t / 1000:.1f}" if t > 1000 else str(t)
                     break
 
-            # Uptime
+            # 运行时间
             ur = read_file_safe('/proc/uptime')
             if ur:
                 secs = int(float(ur.split()[0]))
-                uptime = f"{secs // 3600}h {(secs % 3600) // 60}m"
+                uptime = f"{secs // 3600}小时 {(secs % 3600) // 60}分钟"
             else:
                 uptime = '?'
 
-            # Kernel
+            # 内核
             kv = read_file_safe('/proc/version')
             kernel = kv.split()[2] if kv and len(kv.split()) > 2 else '?'
 
-            # Disk
+            # 磁盘
             disk = run_cmd("df -h /data /sdcard 2>/dev/null | tail -2")
 
-            # Net
+            # 网络
             net = run_cmd(
-                "cat /proc/net/dev | awk 'NR>2{printf \"%s RX:%s TX:%s\\n\",$1,$2,$10}'"
+                "cat /proc/net/dev | awk 'NR>2{printf \"%s 接收:%s 发送:%s\\n\",$1,$2,$10}'"
             )
 
             self.info.text = (
-                f"[b][color=88ccff]--- System Dashboard ---[/color][/b]\n\n"
-                f"[b]CPU[/b]\n"
+                f"[b][color=88ccff]━━━ 系统监控仪表盘 ━━━[/color][/b]\n\n"
+                f"[b]处理器[/b]\n"
                 f"[color={cc}]  |{bar(cpu)}| {cpu}%[/color]\n\n"
-                f"[b]Memory[/b]\n"
+                f"[b]内存[/b]\n"
                 f"[color={mc}]  |{bar(mp)}| {mp}%[/color]\n"
-                f"  {mu // 1024}MB / {mt // 1024}MB\n\n"
-                f"[b]Battery[/b]\n"
-                f"  {esc(bl)}% | {esc(bs_cn)} | {esc(bt)}C\n\n"
-                f"[b]CPU Temp[/b]  {esc(ct)}C\n"
-                f"[b]Uptime[/b]   {esc(uptime)}\n"
-                f"[b]Kernel[/b]   {esc(kernel)}\n\n"
-                f"[b]Disk[/b]\n  {esc(disk)}\n\n"
-                f"[b]Network[/b]\n  {esc(net)}\n"
+                f"  已用 {mu // 1024}MB / 共 {mt // 1024}MB\n\n"
+                f"[b]电池[/b]\n"
+                f"  电量 {esc(bl)}% | {esc(bs_cn)} | 温度 {esc(bt)}°C\n\n"
+                f"[b]处理器温度[/b]  {esc(ct)}°C\n"
+                f"[b]运行时间[/b]    {esc(uptime)}\n"
+                f"[b]内核版本[/b]    {esc(kernel)}\n\n"
+                f"[b]磁盘空间[/b]\n  {esc(disk)}\n\n"
+                f"[b]网络流量[/b]\n  {esc(net)}\n"
             )
         except Exception as e:
-            log_crash(f"SystemMonitor: {traceback.format_exc()}")
-            self.info.text = f"[color=ff4444]Error: {esc(str(e))}[/color]"
+            log_crash(f"系统监控: {traceback.format_exc()}")
+            self.info.text = f"[color=ff4444]读取出错: {esc(str(e))}[/color]"
 
 
 # ============================================================
-# Tab 2: Process Manager (Android-compatible)
+# 标签页 2：进程管理
 # ============================================================
 
 class ProcessTab(BoxLayout):
@@ -271,14 +268,14 @@ class ProcessTab(BoxLayout):
 
         ctrl = BoxLayout(size_hint_y=None, height=44, spacing=4)
         rb = Button(
-            text="Refresh", size_hint_x=0.5,
+            text="刷新进程", size_hint_x=0.5,
             font_size="13sp", background_color=(0.2, 0.5, 0.8, 1),
         )
         rb.bind(on_press=self.refresh)
         ctrl.add_widget(rb)
 
         self.sort_btn = Button(
-            text="Sort:CPU", size_hint_x=0.5,
+            text="排序:CPU", size_hint_x=0.5,
             font_size="13sp", background_color=(0.3, 0.3, 0.4, 1),
         )
         self.sort_btn.bind(on_press=self.toggle_sort)
@@ -287,7 +284,7 @@ class ProcessTab(BoxLayout):
 
         self.scroll = ScrollView(size_hint=(1, 1))
         self.label = Label(
-            size_hint_y=None, text="Tap Refresh...",
+            size_hint_y=None, text="点击「刷新进程」查看...",
             halign="left", valign="top",
             markup=True, font_size="12sp",
         )
@@ -306,14 +303,14 @@ class ProcessTab(BoxLayout):
 
         kill_bar = BoxLayout(size_hint_y=None, height=44, spacing=4)
         self.pid_input = TextInput(
-            hint_text="PID to kill",
+            hint_text="输入 PID 杀进程",
             size_hint_x=0.6, multiline=False, font_size="13sp",
             background_color=(0.15, 0.15, 0.2, 1),
             foreground_color=(1, 1, 1, 1),
         )
         kill_bar.add_widget(self.pid_input)
         kb = Button(
-            text="Kill -9", size_hint_x=0.4,
+            text="强制结束", size_hint_x=0.4,
             font_size="13sp", background_color=(0.8, 0.2, 0.2, 1),
         )
         kb.bind(on_press=self.kill_proc)
@@ -324,18 +321,16 @@ class ProcessTab(BoxLayout):
 
     def toggle_sort(self, *args):
         self.sort_cpu = not self.sort_cpu
-        self.sort_btn.text = "Sort:CPU" if self.sort_cpu else "Sort:MEM"
+        self.sort_btn.text = "排序:CPU" if self.sort_cpu else "排序:内存"
         self.refresh()
 
     def refresh(self, *args):
         try:
-            # Use 'top' which works on Android (toybox)
             output = run_cmd("top -b -n 1 | head -35", root=True)
             if not output or output.startswith("["):
-                # Fallback: basic ps
                 output = run_cmd("ps -A | head -30", root=True)
             if not output:
-                self.label.text = "[color=ffaa00]Need root[/color]"
+                self.label.text = "[color=ffaa00]需要 Root 权限[/color]"
                 return
 
             lines = output.split('\n')
@@ -345,7 +340,6 @@ class ProcessTab(BoxLayout):
                 if i == 0 or line.startswith(' ') and 'PID' in line.upper():
                     colored.append(f"[color=88ccff][b]{safe}[/b][/color]")
                 elif '%' in line:
-                    # Try to detect high CPU
                     nums = re.findall(r'(\d+)%', line)
                     high = any(int(n) > 50 for n in nums) if nums else False
                     med = any(int(n) > 10 for n in nums) if nums else False
@@ -359,25 +353,25 @@ class ProcessTab(BoxLayout):
                     colored.append(safe)
             self.label.text = '\n'.join(colored)
         except Exception as e:
-            log_crash(f"Process: {traceback.format_exc()}")
-            self.label.text = f"[color=ff4444]Error: {esc(str(e))}[/color]"
+            log_crash(f"进程管理: {traceback.format_exc()}")
+            self.label.text = f"[color=ff4444]出错: {esc(str(e))}[/color]"
 
     def kill_proc(self, *args):
         pid = self.pid_input.text.strip()
         if not pid or not pid.isdigit():
-            self.label.text = "[color=ff4444]Enter a valid PID[/color]"
+            self.label.text = "[color=ff4444]请输入有效的 PID 数字[/color]"
             return
         result = run_cmd(f"kill -9 {pid}", root=True)
         if "error" in result.lower() or "denied" in result.lower():
-            self.label.text = f"[color=ff4444]Kill failed: {esc(result)}[/color]"
+            self.label.text = f"[color=ff4444]结束失败: {esc(result)}[/color]"
         else:
-            self.label.text = f"[color=44ff44]Sent kill -9 to PID {esc(pid)}[/color]"
+            self.label.text = f"[color=44ff44]已强制结束进程 PID {esc(pid)}[/color]"
         self.pid_input.text = ""
         Clock.schedule_once(lambda dt: self.refresh(), 0.5)
 
 
 # ============================================================
-# Tab 3: Root Terminal (Android-compatible commands)
+# 标签页 3：Root 终端
 # ============================================================
 
 class TerminalTab(BoxLayout):
@@ -388,9 +382,9 @@ class TerminalTab(BoxLayout):
         self.output = Label(
             size_hint_y=None,
             text=(
-                "[color=44ff44]Root Terminal[/color]\n"
-                "[color=888888]Commands run via su -c[/color]\n"
-                "[color=888888]========================[/color]\n"
+                "[color=44ff44]Root 终端[/color]\n"
+                "[color=888888]所有命令通过 su -c 以 Root 身份执行[/color]\n"
+                "[color=888888]==============================[/color]\n"
             ),
             halign="left", valign="top",
             markup=True, font_size="13sp",
@@ -410,7 +404,7 @@ class TerminalTab(BoxLayout):
 
         input_bar = BoxLayout(size_hint_y=None, height=48, spacing=4)
         self.cmd_input = TextInput(
-            hint_text="# command...",
+            hint_text="# 输入命令...",
             size_hint_x=0.7, multiline=False, font_size="14sp",
             background_color=(0.1, 0.1, 0.15, 1),
             foreground_color=(0.3, 1, 0.3, 1),
@@ -419,22 +413,22 @@ class TerminalTab(BoxLayout):
         input_bar.add_widget(self.cmd_input)
 
         run_btn = Button(
-            text="Run", size_hint_x=0.3, font_size="14sp",
+            text="执行", size_hint_x=0.3, font_size="14sp",
             background_color=(0.2, 0.7, 0.3, 1),
         )
         run_btn.bind(on_press=self.exec_cmd)
         input_bar.add_widget(run_btn)
         self.add_widget(input_bar)
 
-        # Quick commands - all Android-compatible
+        # 快捷命令 - 全部兼容 Android
         quick_bar = BoxLayout(size_hint_y=None, height=40, spacing=2)
         quick_cmds = [
-            ("id", "id"),
-            ("disk", "df -h"),
-            ("ip", "ip addr show"),
-            ("prop", "getprop ro.build.display.id"),
-            ("top", "top -b -n 1 | head -15"),
-            ("CLR", "__clear__"),
+            ("身份", "id"),
+            ("磁盘", "df -h"),
+            ("网络", "ip addr show"),
+            ("系统", "getprop ro.build.display.id"),
+            ("进程", "top -b -n 1 | head -15"),
+            ("清屏", "__clear__"),
         ]
         for label, cmd in quick_cmds:
             btn = Button(
@@ -450,7 +444,7 @@ class TerminalTab(BoxLayout):
 
     def quick_cmd(self, btn):
         if btn.cmd_text == "__clear__":
-            self.output.text = "[color=44ff44]Cleared[/color]\n"
+            self.output.text = "[color=44ff44]已清屏[/color]\n"
             return
         self.cmd_input.text = btn.cmd_text
         self.exec_cmd()
@@ -468,7 +462,7 @@ class TerminalTab(BoxLayout):
                 result = run_cmd(f"cd {target} && pwd", root=True)
                 if result and not result.startswith("["):
                     self.cwd = result
-                    self.output.text += f"dir: {esc(self.cwd)}\n"
+                    self.output.text += f"当前目录: {esc(self.cwd)}\n"
                 else:
                     self.output.text += f"[color=ff4444]{esc(result)}[/color]\n"
             else:
@@ -477,7 +471,7 @@ class TerminalTab(BoxLayout):
                 if result:
                     self.output.text += f"{esc(result)}\n"
                 else:
-                    self.output.text += "[color=888888](no output)[/color]\n"
+                    self.output.text += "[color=888888]（无输出）[/color]\n"
         except Exception as e:
             self.output.text += f"[color=ff4444]{esc(str(e))}[/color]\n"
 
@@ -487,7 +481,7 @@ class TerminalTab(BoxLayout):
 
 
 # ============================================================
-# Tab 4: Log Viewer
+# 标签页 4：日志查看
 # ============================================================
 
 LOG_PATH = "/sdcard/py_monitor.log"
@@ -512,7 +506,7 @@ class LogViewerTab(BoxLayout):
         super().__init__(orientation='vertical', padding=8, spacing=4, **kwargs)
 
         self.status = Label(
-            text="Waiting...", size_hint_y=None, height=32,
+            text="等待日志文件...", size_hint_y=None, height=32,
             halign="left", font_size="12sp", color=(0.6, 0.8, 1, 1),
         )
         self.status.bind(
@@ -524,14 +518,14 @@ class LogViewerTab(BoxLayout):
 
         sb = BoxLayout(size_hint_y=None, height=40, spacing=4)
         self.search = TextInput(
-            hint_text="Filter...", size_hint_x=0.7,
+            hint_text="输入关键词过滤...", size_hint_x=0.7,
             multiline=False, font_size="13sp",
             background_color=(0.15, 0.15, 0.2, 1),
             foreground_color=(1, 1, 1, 1),
         )
         sb.add_widget(self.search)
         self.fbtn = Button(
-            text="Filter:OFF", size_hint_x=0.3,
+            text="过滤:关", size_hint_x=0.3,
             font_size="13sp", background_color=(0.3, 0.3, 0.4, 1),
         )
         self.fbtn.bind(on_press=self.toggle_filter)
@@ -558,13 +552,13 @@ class LogViewerTab(BoxLayout):
 
         bb = BoxLayout(size_hint_y=None, height=44, spacing=4)
         self.pbtn = Button(
-            text="Pause", size_hint_x=0.5,
+            text="暂停", size_hint_x=0.5,
             font_size="14sp", background_color=(0.2, 0.5, 0.8, 1),
         )
         self.pbtn.bind(on_press=self.toggle_pause)
         bb.add_widget(self.pbtn)
         sb2 = Button(
-            text="Bottom", size_hint_x=0.5,
+            text="回到底部", size_hint_x=0.5,
             font_size="14sp", background_color=(0.3, 0.6, 0.3, 1),
         )
         sb2.bind(on_press=lambda x: setattr(self.scroll, 'scroll_y', 0))
@@ -578,14 +572,14 @@ class LogViewerTab(BoxLayout):
 
     def toggle_pause(self, *args):
         self.paused = not self.paused
-        self.pbtn.text = "Resume" if self.paused else "Pause"
+        self.pbtn.text = "继续" if self.paused else "暂停"
         self.pbtn.background_color = (
             (0.8, 0.4, 0.2, 1) if self.paused else (0.2, 0.5, 0.8, 1)
         )
 
     def toggle_filter(self, *args):
         self.filter_on = not self.filter_on
-        self.fbtn.text = "Filter:ON" if self.filter_on else "Filter:OFF"
+        self.fbtn.text = "过滤:开" if self.filter_on else "过滤:关"
         self.fbtn.background_color = (
             (0.2, 0.7, 0.3, 1) if self.filter_on else (0.3, 0.3, 0.4, 1)
         )
@@ -596,8 +590,11 @@ class LogViewerTab(BoxLayout):
             return
         try:
             if not os.path.exists(LOG_PATH):
-                self.label.text = f"[color=ffaa00]File not found[/color]\n{esc(LOG_PATH)}"
-                self.status.text = "Not found"
+                self.label.text = (
+                    f"[color=ffaa00]日志文件不存在[/color]\n"
+                    f"路径：{esc(LOG_PATH)}"
+                )
+                self.status.text = "文件未找到"
                 return
 
             st = os.stat(LOG_PATH)
@@ -607,7 +604,7 @@ class LogViewerTab(BoxLayout):
 
             lines = tail_read(LOG_PATH, MAX_LINES)
             if not lines:
-                self.label.text = "[color=888888]Empty[/color]"
+                self.label.text = "[color=888888]日志文件为空[/color]"
                 return
 
             kw = self.search.text.strip()
@@ -627,21 +624,21 @@ class LogViewerTab(BoxLayout):
 
             t = time.strftime("%H:%M:%S", time.localtime(st.st_mtime))
             sz = format_size(st.st_size)
-            fi = f" | filtered:{len(display)}" if (self.filter_on and kw) else ""
-            self.status.text = f"{sz} | {len(lines)} lines{fi} | {t}"
+            fi = f" | 过滤后 {len(display)} 行" if (self.filter_on and kw) else ""
+            self.status.text = f"{sz} | {len(lines)} 行{fi} | 更新于 {t}"
 
             Clock.schedule_once(
                 lambda dt: setattr(self.scroll, 'scroll_y', 0), 0.1
             )
         except PermissionError:
-            self.label.text = "[color=ff4444]Permission denied[/color]"
+            self.label.text = "[color=ff4444]权限不足，请授权文件访问[/color]"
         except Exception as e:
-            log_crash(f"LogViewer: {traceback.format_exc()}")
-            self.label.text = f"[color=ff4444]Error: {esc(str(e))}[/color]"
+            log_crash(f"日志查看: {traceback.format_exc()}")
+            self.label.text = f"[color=ff4444]出错: {esc(str(e))}[/color]"
 
 
 # ============================================================
-# Tab 5: Logcat Viewer
+# 标签页 5：系统日志（Logcat）
 # ============================================================
 
 class LogcatTab(BoxLayout):
@@ -667,7 +664,7 @@ class LogcatTab(BoxLayout):
 
         tb = BoxLayout(size_hint_y=None, height=40, spacing=4)
         self.tag_input = TextInput(
-            hint_text="Filter TAG (empty=all)",
+            hint_text="过滤标签（留空显示全部）",
             size_hint_x=1, multiline=False, font_size="13sp",
             background_color=(0.15, 0.15, 0.2, 1),
             foreground_color=(1, 1, 1, 1),
@@ -677,7 +674,7 @@ class LogcatTab(BoxLayout):
 
         self.scroll = ScrollView(size_hint=(1, 1))
         self.label = Label(
-            size_hint_y=None, text="Tap Capture...",
+            size_hint_y=None, text="点击「捕获」按钮开始...",
             halign="left", valign="top",
             markup=True, font_size="11sp",
         )
@@ -696,28 +693,28 @@ class LogcatTab(BoxLayout):
 
         ctrl = BoxLayout(size_hint_y=None, height=44, spacing=4)
         cb = Button(
-            text="Capture", size_hint_x=0.3,
+            text="捕获日志", size_hint_x=0.3,
             font_size="13sp", background_color=(0.2, 0.7, 0.3, 1),
         )
         cb.bind(on_press=self.capture)
         ctrl.add_widget(cb)
 
         clb = Button(
-            text="Clear", size_hint_x=0.2,
+            text="清空", size_hint_x=0.2,
             font_size="13sp", background_color=(0.5, 0.3, 0.3, 1),
         )
         clb.bind(on_press=lambda x: setattr(self.label, 'text', ''))
         ctrl.add_widget(clb)
 
         svb = Button(
-            text="Save", size_hint_x=0.2,
+            text="保存", size_hint_x=0.2,
             font_size="13sp", background_color=(0.3, 0.3, 0.5, 1),
         )
         svb.bind(on_press=self.save)
         ctrl.add_widget(svb)
 
         lb = Button(
-            text="Live", size_hint_x=0.3,
+            text="实时", size_hint_x=0.3,
             font_size="13sp", background_color=(0.6, 0.4, 0.2, 1),
         )
         lb.bind(on_press=self.toggle_live)
@@ -747,7 +744,7 @@ class LogcatTab(BoxLayout):
 
     def capture(self, *args):
         try:
-            self.label.text = "[color=888888]Capturing...[/color]\n"
+            self.label.text = "[color=888888]正在捕获...[/color]\n"
             tag = self.tag_input.text.strip()
             if tag:
                 cmd = f"logcat -d -v brief -s {tag}:{self.log_level} | tail -200"
@@ -760,23 +757,23 @@ class LogcatTab(BoxLayout):
                 colored = [self.color_lc(esc(l)) for l in lines]
                 self.label.text = '\n'.join(colored)
             else:
-                self.label.text = f"[color=ffaa00]No output (Level={esc(self.log_level)})[/color]"
+                self.label.text = f"[color=ffaa00]无输出（级别={esc(self.log_level)}）[/color]"
             Clock.schedule_once(
                 lambda dt: setattr(self.scroll, 'scroll_y', 0), 0.1
             )
         except Exception as e:
-            self.label.text = f"[color=ff4444]Error: {esc(str(e))}[/color]"
+            self.label.text = f"[color=ff4444]出错: {esc(str(e))}[/color]"
 
     def toggle_live(self, *args):
         if self.live_ev:
             self.live_ev.cancel()
             self.live_ev = None
-            self.label.text += "\n[color=ffaa00]Live OFF[/color]"
+            self.label.text += "\n[color=ffaa00]实时模式已关闭[/color]"
         else:
             self.live_ev = Clock.schedule_interval(
                 lambda dt: self.capture(), 2
             )
-            self.label.text = "[color=44ff44]Live ON (2s refresh)[/color]\n"
+            self.label.text = "[color=44ff44]实时模式已开启（每2秒刷新）[/color]\n"
 
     def save(self, *args):
         try:
@@ -785,13 +782,13 @@ class LogcatTab(BoxLayout):
             clean = clean.replace('&amp;', '&').replace('&bl;', '[').replace('&br;', ']')
             with open(path, 'w', encoding='utf-8') as f:
                 f.write(clean)
-            self.label.text += f"\n[color=44ff44]Saved to {esc(path)}[/color]"
+            self.label.text += f"\n[color=44ff44]已保存到 {esc(path)}[/color]"
         except Exception as e:
-            self.label.text += f"\n[color=ff4444]Save failed: {esc(str(e))}[/color]"
+            self.label.text += f"\n[color=ff4444]保存失败: {esc(str(e))}[/color]"
 
 
 # ============================================================
-# Main App (crash-safe)
+# 主程序（防崩溃）
 # ============================================================
 
 class MonitorApp(App):
@@ -805,11 +802,11 @@ class MonitorApp(App):
             tp = TabbedPanel(do_default_tab=False)
 
             tabs = [
-                ("Monitor", SystemMonitorTab()),
-                ("Process", ProcessTab()),
-                ("Terminal", TerminalTab()),
-                ("Log", LogViewerTab()),
-                ("Logcat", LogcatTab()),
+                ("监控", SystemMonitorTab()),
+                ("进程", ProcessTab()),
+                ("终端", TerminalTab()),
+                ("日志", LogViewerTab()),
+                ("系统", LogcatTab()),
             ]
 
             for title, content in tabs:
@@ -820,9 +817,9 @@ class MonitorApp(App):
             return tp
 
         except Exception as e:
-            log_crash(f"BUILD CRASH: {traceback.format_exc()}")
+            log_crash(f"启动崩溃: {traceback.format_exc()}")
             return Label(
-                text=f"Startup Error:\n{e}\n\nCheck {CRASH_LOG}",
+                text=f"启动出错：\n{e}\n\n请查看 {CRASH_LOG}",
                 halign="center", valign="middle",
             )
 
@@ -831,4 +828,4 @@ if __name__ == "__main__":
     try:
         MonitorApp().run()
     except Exception as e:
-        log_crash(f"FATAL: {traceback.format_exc()}")
+        log_crash(f"致命错误: {traceback.format_exc()}")
