@@ -10,23 +10,26 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
-    - name: Install dependencies
+    - name: Install system dependencies
       run: |
         sudo apt update
-        sudo apt install -y python3 python3-pip python3-setuptools git zip
-        sudo apt install -y openjdk-17-jdk
-        pip install buildozer
-        pip install cython
+        sudo apt install -y python3 python3-pip python3-setuptools git zip unzip openjdk-17-jdk
+        sudo apt install -y libffi-dev libssl-dev
+        sudo apt install -y liblzma-dev zlib1g-dev
 
-    - name: Install Android SDK/NDK
+    - name: Install buildozer
       run: |
-        sudo apt install -y unzip
+        pip install --upgrade pip
+        pip install cython buildozer
+
+    - name: Build APK
+      run: |
         buildozer android debug
 
     - name: Upload APK
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: MyMonitorApp
         path: bin/*.apk
