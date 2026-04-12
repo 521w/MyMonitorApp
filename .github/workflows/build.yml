@@ -13,25 +13,24 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    # ★ 缓存 Buildozer 的 SDK/NDK 和编译产物（首次构建后生效）
     - name: Cache Buildozer
       uses: actions/cache@v4
       with:
-        path: |
-          .buildozer
+        path: .buildozer
         key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
         restore-keys: |
           buildozer-${{ runner.os }}-
 
     - name: Build with Buildozer
-      uses: ArtemSBulgakov/buildozer-action@v1
-      id: buildozer
-      with:
-        command: buildozer android debug
-        buildozer_version: stable
+      run: |
+        docker run --rm \
+          -v "$(pwd)":/home/user/hostcwd \
+          -w /home/user/hostcwd \
+          kivy/buildozer:latest \
+          buildozer -v android debug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: MyMonitorApp
-        path: ${{ steps.buildozer.outputs.filename }}
+        path: bin/*.apk
