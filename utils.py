@@ -1,4 +1,4 @@
-"""公共工具函数"""
+"""公共工具函数 - 增强权限版"""
 
 import subprocess
 import os
@@ -14,13 +14,26 @@ try:
 except Exception:
     pass
 
+# 需要动态请求的全部权限
+REQUIRED_PERMISSIONS = [
+    'READ_EXTERNAL_STORAGE',
+    'WRITE_EXTERNAL_STORAGE',
+    'READ_PHONE_STATE',
+    'ACCESS_FINE_LOCATION',
+    'ACCESS_COARSE_LOCATION',
+    'BLUETOOTH_CONNECT',
+    'CAMERA',
+    'READ_LOGS',
+]
+
 
 def request_android_perms():
+    """动态请求所有需要的权限"""
     if not ANDROID:
         return
     try:
         perms = []
-        for p in ['READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE']:
+        for p in REQUIRED_PERMISSIONS:
             try:
                 perms.append(getattr(Permission, p))
             except AttributeError:
