@@ -97,9 +97,10 @@ class SystemMonitorTab(BoxLayout):
             # 磁盘
             disk = run_cmd("df -h /data /sdcard 2>/dev/null | tail -2")
 
-            # 网络
+            # 网络 ← 关键修复：加 root=True
             net = run_cmd(
-                "cat /proc/net/dev | awk 'NR>2{printf \"%s  ↓%s  ↑%s\\n\",$1,$2,$10}'"
+                "cat /proc/net/dev | awk 'NR>2{printf \"%s  ↓%s  ↑%s\\n\",$1,$2,$10}'",
+                root=True,
             )
 
             self.scroll.text = (
