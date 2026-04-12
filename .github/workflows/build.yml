@@ -22,20 +22,30 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          python3-pip python3-setuptools python3-dev \
           git zip unzip \
+          python3-pip python3-virtualenv python3-dev \
           autoconf automake libtool pkg-config cmake \
-          libffi-dev libssl-dev liblzma-dev zlib1g-dev \
+          zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 \
+          libffi-dev libssl-dev \
           build-essential ccache \
-          aidl
+          autopoint gettext
 
-    - name: Install buildozer
+    - name: Install Rust
       run: |
+        curl https://sh.rustup.rs -sSf | sh -s -- -y
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Set up Python venv and install buildozer
+      run: |
+        python3 -m virtualenv venv
+        source venv/bin/activate
         pip install --upgrade pip setuptools
-        pip install cython buildozer
+        pip install buildozer cython==0.29.34
+        echo "$PWD/venv/bin" >> $GITHUB_PATH
 
     - name: Build APK
       run: |
+        source venv/bin/activate
         buildozer -v android debug
 
     - name: Upload APK
