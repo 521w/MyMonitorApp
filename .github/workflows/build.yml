@@ -23,9 +23,15 @@ jobs:
         pip install --upgrade pip
         pip install cython buildozer
 
-    - name: Install Android SDK/NDK
+    - name: Install Android SDK + AIDL
       run: |
-        sudo apt install -y wget
+        sudo apt install -y android-sdk
+        sudo apt install -y aidl
+        echo "export PATH=$PATH:/usr/lib/android-sdk/build-tools/33.0.0" >> $GITHUB_ENV
+        echo "export PATH=$PATH:/usr/lib/android-sdk/platform-tools" >> $GITHUB_ENV
+
+    - name: First build (downloads SDK/NDK)
+      run: |
         buildozer android debug || true
 
     - name: Build APK
