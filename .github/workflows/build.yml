@@ -24,8 +24,8 @@ jobs:
       uses: actions/cache@v4
       with:
         path: .buildozer
-        key: buildozer-v2-${{ hashFiles('buildozer.spec') }}
-        restore-keys: buildozer-v2-
+        key: buildozer-v3-${{ hashFiles('buildozer.spec') }}
+        restore-keys: buildozer-v3-
 
     - name: Install Android SDK Platform 33
       run: |
@@ -33,6 +33,12 @@ jobs:
           "platforms;android-33" \
           "build-tools;33.0.2" \
           "platform-tools"
+
+    - name: Fix sdkmanager path for Buildozer
+      run: |
+        mkdir -p $ANDROID_HOME/tools/bin
+        ln -sf $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager $ANDROID_HOME/tools/bin/sdkmanager
+        ln -sf $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager $ANDROID_HOME/tools/bin/avdmanager
 
     - name: Install system dependencies
       run: |
