@@ -26,7 +26,8 @@ jobs:
           git zip unzip \
           autoconf automake libtool pkg-config cmake \
           libffi-dev libssl-dev liblzma-dev zlib1g-dev \
-          build-essential ccache
+          build-essential ccache \
+          aidl
 
     - name: Install buildozer
       run: |
@@ -35,7 +36,7 @@ jobs:
 
     - name: Build APK
       run: |
-        buildozer android debug
+        buildozer -v android debug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
