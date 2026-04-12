@@ -1,159 +1,164 @@
-"""标签页：系统日志（Logcat）"""
+"""标签页：日志查看 - 美化版"""
 
-from kivy.uix.label import Label
-from kivy.uix.button import Button
-from kivy.uix.textinput import TextInput
-from kivy.uix.scrollview import ScrollView
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
+from kivy.uix.textinput import TextInput
 from kivy.clock import Clock
-import re
+import os
+import time
+import traceback
 
-from utils import run_cmd, esc
+import theme as T
+from utils import esc, tail_read, format_size, log_crash
+from widgets import IconButton, ScrollLabel
+
+LOG_PATH = "/sdcard/py_monitor.log"
+MAX_LINES = 500
 
 
-class LogcatTab(BoxLayout):
+def colorize(line):
+    upper = line.upper()
+    if "ERROR" in upper or "FATAL" in upper or "EXCEPTION" in upper:
+        return f"[color={T.RED_HEX}]{line}[/color]"
+    elif "WARN" in upper:
+        return f"[color={T.YELLOW_HEX}]{line}[/color]"
+    elif "SUCCESS" in upper or "DONE" in upper:
+        return f"[color={T.GREEN_HEX}]{line}[/color]"
+    elif "DEBUG" in upper:
+        return f"[color=888888]{line}[/color]"
+    return line
+
+
+class LogViewerTab(BoxLayout):
     def __init__(self, **kwargs):
-        super().__init__(orientation='vertical', padding=8, spacing=4, **kwargs)
+        super().__init__(orientation='vertical', padding=6, spacing=4, **kwargs)
 
-        fb = BoxLayout(size_hint_y=None, height=40, spacing=4)
-        self.log_level = "I"
-        self.lvbtns = []
-        for lv in ["V", "D", "I", "W", "E"]:
-            btn = Button(
-                text=lv, font_size="13sp",
-                background_color=(
-                    (0.2, 0.5, 0.8, 1) if lv == "I"
-                    else (0.3, 0.3, 0.4, 1)
-                ),
-            )
-            btn.lv = lv
-            btn.bind(on_press=self.set_lv)
-            fb.add_widget(btn)
-            self.lvbtns.append(btn)
-        self.add_widget(fb)
-
-        tb = BoxLayout(size_hint_y=None, height=40, spacing=4)
-        self.tag_input = TextInput(
-            hint_text="过滤标签（留空显示全部）",
-            size_hint_x=1, multiline=False, font_size="13sp",
-            background_color=(0.15, 0.15, 0.2, 1),
-            foreground_color=(1, 1, 1, 1),
+        # 状态栏
+        self.status = Label(
+            text=f"[color={T.ACCENT_HEX}]◇ 等待日志文件...[/color]",
+            markup=True, size_hint_y=None, height=30,
+            halign="left", font_size=T.FONT_SM,
         )
-        tb.add_widget(self.tag_input)
-        self.add_widget(tb)
-
-        self.scroll = ScrollView(size_hint=(1, 1))
-        self.label = Label(
-            size_hint_y=None, text="点击「捕获」按钮开始...",
-            halign="left", valign="top",
-            markup=True, font_size="11sp",
-        )
-        self.label.bind(
-            texture_size=lambda *a: setattr(
-                self.label, 'height', self.label.texture_size[1] + 20
+        self.status.bind(
+            size=lambda *a: setattr(
+                self.status, 'text_size', (self.status.width, None)
             )
         )
-        self.scroll.bind(
-            width=lambda inst, w: setattr(
-                self.label, 'text_size', (w - 8, None)
-            )
+        self.add_widget(self.status)
+
+        # 搜索栏
+        sb = BoxLayout(size_hint_y=None, height=42, spacing=4)
+        self.search = TextInput(
+            hint_text="输入关键词过滤...", size_hint_x=0.7,
+            multiline=False, font_size=T.FONT_MD,
+            background_color=T.BG_INPUT,
+            foreground_color=T.TEXT_PRIMARY,
+            hint_text_color=T.TEXT_DIM,
         )
-        self.scroll.add_widget(self.label)
+        sb.add_widget(self.search)
+        self.fbtn = IconButton(
+            icon="◯", text="过滤:关",
+            size_hint_x=0.3, background_color=T.BTN_NEUTRAL,
+        )
+        self.fbtn.bind(on_press=self.toggle_filter)
+        sb.add_widget(self.fbtn)
+        self.add_widget(sb)
+
+        # 日志内容
+        self.scroll = ScrollLabel(font_size=T.FONT_MD)
         self.add_widget(self.scroll)
 
-        ctrl = BoxLayout(size_hint_y=None, height=44, spacing=4)
-        cb = Button(
-            text="捕获日志", size_hint_x=0.3,
-            font_size="13sp", background_color=(0.2, 0.7, 0.3, 1),
+        # 底部控制
+        bb = BoxLayout(size_hint_y=None, height=46, spacing=6)
+        self.pbtn = IconButton(
+            icon="⏸", text="暂停",
+            size_hint_x=0.5, background_color=T.BTN_PRIMARY,
         )
-        cb.bind(on_press=self.capture)
-        ctrl.add_widget(cb)
-
-        clb = Button(
-            text="清空", size_hint_x=0.2,
-            font_size="13sp", background_color=(0.5, 0.3, 0.3, 1),
+        self.pbtn.bind(on_press=self.toggle_pause)
+        bb.add_widget(self.pbtn)
+        sb2 = IconButton(
+            icon="↓", text="回到底部",
+            size_hint_x=0.5, background_color=T.BTN_SUCCESS,
         )
-        clb.bind(on_press=lambda x: setattr(self.label, 'text', ''))
-        ctrl.add_widget(clb)
+        sb2.bind(on_press=lambda x: self.scroll.scroll_to_bottom())
+        bb.add_widget(sb2)
+        self.add_widget(bb)
 
-        svb = Button(
-            text="保存", size_hint_x=0.2,
-            font_size="13sp", background_color=(0.3, 0.3, 0.5, 1),
-        )
-        svb.bind(on_press=self.save)
-        ctrl.add_widget(svb)
+        self.paused = False
+        self.filter_on = False
+        self.last_mt = 0
+        Clock.schedule_interval(self.update, 0.5)
 
-        lb = Button(
-            text="实时", size_hint_x=0.3,
-            font_size="13sp", background_color=(0.6, 0.4, 0.2, 1),
-        )
-        lb.bind(on_press=self.toggle_live)
-        ctrl.add_widget(lb)
-        self.add_widget(ctrl)
-
-        self.live_ev = None
-
-    def set_lv(self, btn):
-        self.log_level = btn.lv
-        for b in self.lvbtns:
-            b.background_color = (
-                (0.2, 0.5, 0.8, 1) if b.lv == self.log_level
-                else (0.3, 0.3, 0.4, 1)
-            )
-
-    def color_lc(self, line):
-        if ' E ' in line or '/E ' in line:
-            return f"[color=ff4444]{line}[/color]"
-        elif ' W ' in line or '/W ' in line:
-            return f"[color=ffaa00]{line}[/color]"
-        elif ' I ' in line or '/I ' in line:
-            return f"[color=44ff44]{line}[/color]"
-        elif ' D ' in line or '/D ' in line:
-            return f"[color=888888]{line}[/color]"
-        return line
-
-    def capture(self, *args):
-        try:
-            self.label.text = "[color=888888]正在捕获...[/color]\n"
-            tag = self.tag_input.text.strip()
-            if tag:
-                cmd = f"logcat -d -v brief -s {tag}:{self.log_level} | tail -200"
-            else:
-                cmd = f"logcat -d -v brief *:{self.log_level} | tail -200"
-
-            output = run_cmd(cmd, root=True, timeout=10)
-            if output and not output.startswith("["):
-                lines = output.split('\n')
-                colored = [self.color_lc(esc(l)) for l in lines]
-                self.label.text = '\n'.join(colored)
-            else:
-                self.label.text = (
-                    f"[color=ffaa00]无输出（级别={esc(self.log_level)}）[/color]"
-                )
-            Clock.schedule_once(
-                lambda dt: setattr(self.scroll, 'scroll_y', 0), 0.1
-            )
-        except Exception as e:
-            self.label.text = f"[color=ff4444]出错: {esc(str(e))}[/color]"
-
-    def toggle_live(self, *args):
-        if self.live_ev:
-            self.live_ev.cancel()
-            self.live_ev = None
-            self.label.text += "\n[color=ffaa00]实时模式已关闭[/color]"
+    def toggle_pause(self, *args):
+        self.paused = not self.paused
+        if self.paused:
+            self.pbtn.text = "▶ 继续"
+            self.pbtn.background_color = T.BTN_WARN
         else:
-            self.live_ev = Clock.schedule_interval(
-                lambda dt: self.capture(), 2
-            )
-            self.label.text = "[color=44ff44]实时模式已开启（每2秒刷新）[/color]\n"
+            self.pbtn.text = "⏸ 暂停"
+            self.pbtn.background_color = T.BTN_PRIMARY
 
-    def save(self, *args):
+    def toggle_filter(self, *args):
+        self.filter_on = not self.filter_on
+        if self.filter_on:
+            self.fbtn.text = "● 过滤:开"
+            self.fbtn.background_color = T.BTN_SUCCESS
+        else:
+            self.fbtn.text = "◯ 过滤:关"
+            self.fbtn.background_color = T.BTN_NEUTRAL
+        self.last_mt = 0
+
+    def update(self, dt):
+        if self.paused:
+            return
         try:
-            path = "/sdcard/logcat_dump.txt"
-            clean = re.sub(r'\[/?color[^\]]*\]', '', self.label.text)
-            clean = clean.replace('&amp;', '&').replace('&bl;', '[').replace('&br;', ']')
-            with open(path, 'w', encoding='utf-8') as f:
-                f.write(clean)
-            self.label.text += f"\n[color=44ff44]已保存到 {esc(path)}[/color]"
+            if not os.path.exists(LOG_PATH):
+                self.scroll.text = (
+                    f"[color={T.YELLOW_HEX}]日志文件不存在[/color]\n"
+                    f"路径：{esc(LOG_PATH)}"
+                )
+                self.status.text = f"[color={T.YELLOW_HEX}]◇ 文件未找到[/color]"
+                return
+
+            st = os.stat(LOG_PATH)
+            if st.st_mtime == self.last_mt:
+                return
+            self.last_mt = st.st_mtime
+
+            lines = tail_read(LOG_PATH, MAX_LINES)
+            if not lines:
+                self.scroll.text = "[color=888888]日志文件为空[/color]"
+                return
+
+            kw = self.search.text.strip()
+            if self.filter_on and kw:
+                lines = [l for l in lines if kw.lower() in l.lower()]
+
+            display = []
+            for line in lines:
+                line = line.rstrip('\n\r')
+                safe = esc(line)
+                colored = colorize(safe)
+                if kw and kw.lower() in line.lower():
+                    colored = f"[color=00ffff]▸[/color] {colored}"
+                display.append(colored)
+
+            self.scroll.text = '\n'.join(display)
+
+            t = time.strftime("%H:%M:%S", time.localtime(st.st_mtime))
+            sz = format_size(st.st_size)
+            fi = f" | 过滤后 {len(display)} 行" if (self.filter_on and kw) else ""
+            self.status.text = (
+                f"[color={T.ACCENT_HEX}]◇ {sz} | "
+                f"{len(lines)} 行{fi} | {t}[/color]"
+            )
+            self.scroll.scroll_to_bottom()
+        except PermissionError:
+            self.scroll.text = (
+                f"[color={T.RED_HEX}]权限不足，请授权文件访问[/color]"
+            )
         except Exception as e:
-            self.label.text += f"\n[color=ff4444]保存失败: {esc(str(e))}[/color]"
+            log_crash(f"日志查看: {traceback.format_exc()}")
+            self.scroll.text = (
+                f"[color={T.RED_HEX}]出错: {esc(str(e))}[/color]"
+            )
