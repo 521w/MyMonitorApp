@@ -1,139 +1,141 @@
-"""标签页：系统监控 - 卡片式仪表盘"""
-
+"""系统监控"""
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.scrollview import ScrollView
 from kivy.clock import Clock
-import traceback
-
+from kivy.metrics import dp
+import subprocess, os
 import theme as T
-from utils import run_cmd, read_file_safe, esc, bar, color_val, log_crash
-from widgets import StyledCard, SectionHeader, IconButton, ScrollLabel, Divider
+from widgets import StyledCard, StyledLabel, StyledButton
 
 
 class SystemMonitorTab(BoxLayout):
     def __init__(self, **kwargs):
-        super().__init__(orientation='vertical', padding=6, spacing=6, **kwargs)
-        self.prev_cpu = None
+        super().__init__(orientation="vertical", padding=dp(8), spacing=dp(8), **kwargs)
 
-        self.scroll = ScrollLabel(font_size=T.FONT_MD)
-        self.scroll.text = "[color=888888]正在加载系统信息...[/color]"
-        self.add_widget(self.scroll)
-
-        btn = IconButton(
-            icon="↻", text="手动刷新",
-            background_color=T.BTN_PRIMARY,
+        scroll = ScrollView()
+        self.content = BoxLayout(
+            orientation="vertical", size_hint_y=None, spacing=dp(8), padding=[0, dp(4)]
         )
-        btn.bind(on_press=lambda x: self.update(0))
-        self.add_widget(btn)
+        self.content.bind(minimum_height=self.content.setter("height"))
 
-        Clock.schedule_interval(self.update, 3)
+        cards = {
+            "cpu": ("CPU: 读取中...", dp(130)),
+            "mem": ("内存: 读取中...", dp(100)),
+            "bat": ("电池: 读取中...", dp(80)),
+            "disk": ("存储: 读取中...", dp(80)),
+            "net": ("网络: 读取中...", dp(100)),
+        }
+        for key, (txt, h) in cards.items():
+            card = StyledCard(size_hint_y=None, height=h)
+            lbl = StyledLabel(text=txt, font_size=T.FONT_MD, halign="left", valign="top")
+            lbl.bind(size=lbl.setter("text_size"))
+            card.add_widget(lbl)
+            self.content.add_widget(card)
+            setattr(self, f"{key}_label", lbl)
 
-    def _cpu_sample(self):
-        line = read_file_safe('/proc/stat')
-        if not line:
-            return None
-        first = line.split('\n')[0].split()
-        if len(first) < 5:
-            return None
-        vals = list(map(int, first[1:8] if len(first) >= 8 else first[1:]))
-        return sum(vals), vals[3]
+        btn = StyledButton(text="🔄 刷新")
+        btn.bind(on_release=lambda x: self.refresh())
+        self.content.add_widget(btn)
 
-    def update(self, dt):
+        scroll.add_widget(self.content)
+        self.add_widget(scroll)
+        Clock.schedule_interval(self.refresh, 3)
+
+    def _run(self, cmd):
         try:
-            # CPU
-            s = self._cpu_sample()
-            cpu = 0
-            if s and self.prev_cpu:
-                td = s[0] - self.prev_cpu[0]
-                idd = s[1] - self.prev_cpu[1]
-                cpu = round((1 - idd / td) * 100, 1) if td > 0 else 0
-            self.prev_cpu = s
-            cc = color_val(cpu)
+            r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
+            return r.stdout.strip()
+        except Exception:
+            return ""
 
-            # 内存
-            mi = {}
-            for line in read_file_safe('/proc/meminfo').split('\n'):
-                p = line.split()
-                if len(p) >= 2:
-                    mi[p[0].rstrip(':')] = int(p[1])
-            mt = mi.get('MemTotal', 1)
-            ma = mi.get('MemAvailable', mi.get('MemFree', 0))
-            mu = mt - ma
-            mp = round(mu / mt * 100, 1) if mt > 0 else 0
-            mc = color_val(mp, 60, 85)
+    def _color(self, pct):
+        if pct < 60:
+            return T.GREEN_HEX
+        return T.YELLOW_HEX if pct < 85 else T.RED_HEX
 
-            # 电池
-            bb = '/sys/class/power_supply/battery'
-            bl = read_file_safe(f'{bb}/capacity') or '?'
-            bs = read_file_safe(f'{bb}/status') or '?'
-            bt_raw = read_file_safe(f'{bb}/temp')
-            bt = f"{int(bt_raw) / 10:.1f}" if bt_raw.isdigit() else '?'
-            bs_cn = {'Charging': '⚡ 充电中', 'Discharging': '🔋 放电中',
-                     'Full': '✓ 已充满', 'Not charging': '─ 未充电'}.get(bs, bs)
+    def refresh(self, *args):
+        A = T.ACCENT_HEX
+        G = T.GREEN_HEX
 
-            # CPU 温度
-            ct = '?'
-            for p in ['/sys/class/thermal/thermal_zone0/temp']:
-                v = read_file_safe(p)
-                if v and v.isdigit():
-                    t = int(v)
-                    ct = f"{t / 1000:.1f}" if t > 1000 else str(t)
-                    break
-
-            # 运行时间
-            ur = read_file_safe('/proc/uptime')
-            if ur:
-                secs = int(float(ur.split()[0]))
-                d = secs // 86400
-                h = (secs % 86400) // 3600
-                m = (secs % 3600) // 60
-                uptime = f"{d}天 {h}时 {m}分" if d > 0 else f"{h}时 {m}分"
-            else:
-                uptime = '?'
-
-            # 内核
-            kv = read_file_safe('/proc/version')
-            kernel = kv.split()[2] if kv and len(kv.split()) > 2 else '?'
-
-            # 磁盘
-            disk = run_cmd("df -h /data /sdcard 2>/dev/null | tail -2")
-
-            # 网络 ← 关键修复：加 root=True
-            net = run_cmd(
-                "cat /proc/net/dev | awk 'NR>2{printf \"%s  ↓%s  ↑%s\\n\",$1,$2,$10}'",
-                root=True,
-            )
-
-            self.scroll.text = (
-                f"[b][color={T.ACCENT_HEX}]"
-                f"┌──────────────────────────┐\n"
-                f"│      系 统 监 控 仪 表 盘      │\n"
-                f"└──────────────────────────┘"
-                f"[/color][/b]\n\n"
-
-                f"[color={T.ACCENT_HEX}]● 处理器[/color]\n"
-                f"  [color={cc}]{bar(cpu)} {cpu}%[/color]\n\n"
-
-                f"[color={T.ACCENT_HEX}]● 内存[/color]\n"
-                f"  [color={mc}]{bar(mp)} {mp}%[/color]\n"
-                f"  [color={T.ACCENT_HEX}]已用[/color] {mu // 1024}MB  "
-                f"[color={T.ACCENT_HEX}]共[/color] {mt // 1024}MB  "
-                f"[color={T.GREEN_HEX}]可用 {ma // 1024}MB[/color]\n\n"
-
-                f"[color={T.ACCENT_HEX}]● 电池[/color]\n"
-                f"  电量 [b]{esc(bl)}%[/b]  {esc(bs_cn)}  温度 {esc(bt)}°C\n\n"
-
-                f"[color={T.PURPLE_HEX}]━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/color]\n\n"
-
-                f"  [color={T.ACCENT_HEX}]处理器温度[/color]  {esc(ct)}°C\n"
-                f"  [color={T.ACCENT_HEX}]运行时间  [/color]  {esc(uptime)}\n"
-                f"  [color={T.ACCENT_HEX}]内核版本  [/color]  {esc(kernel)}\n\n"
-
-                f"[color={T.ACCENT_HEX}]● 磁盘空间[/color]\n"
-                f"  {esc(disk)}\n\n"
-
-                f"[color={T.ACCENT_HEX}]● 网络流量[/color] (接口 ↓接收 ↑发送)\n"
-                f"  {esc(net)}\n"
+        # CPU
+        try:
+            loads = (self._run("cat /proc/loadavg") or "0 0 0").split()
+            cores = self._run("nproc") or "?"
+            freq = self._run("cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq")
+            freq_s = f"{int(freq)//1000}MHz" if freq.isdigit() else "N/A"
+            temp = self._run("cat /sys/class/thermal/thermal_zone0/temp")
+            temp_s = f"{int(temp)/1000:.1f}°C" if temp.isdigit() else "N/A"
+            self.cpu_label.text = (
+                f"[color={A}]━━ CPU ━━[/color]\n"
+                f"核心: [color={G}]{cores}[/color]   频率: [color={G}]{freq_s}[/color]\n"
+                f"温度: [color={G}]{temp_s}[/color]\n"
+                f"负载: [color={G}]{loads[0]}[/color] / [color={G}]{loads[1]}[/color] / [color={G}]{loads[2]}[/color]"
             )
         except Exception as e:
-            log_crash(f"系统监控: {traceback.format_exc()}")
-            self.scroll.text = f"[color={T.RED_HEX}]读取出错: {esc(str(e))}[/color]"
+            self.cpu_label.text = f"[color={T.RED_HEX}]CPU 读取失败: {e}[/color]"
+
+        # Memory
+        try:
+            mi = {}
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    p = line.split(":")
+                    if len(p) == 2:
+                        mi[p[0].strip()] = int(p[1].strip().split()[0])
+            total = mi.get("MemTotal", 0) // 1024
+            avail = mi.get("MemAvailable", 0) // 1024
+            used = total - avail
+            pct = (used / total * 100) if total else 0
+            c = self._color(pct)
+            self.mem_label.text = (
+                f"[color={A}]━━ 内存 ━━[/color]\n"
+                f"已用: [color={c}]{used}MB[/color] / {total}MB  ([color={c}]{pct:.1f}%[/color])\n"
+                f"可用: [color={G}]{avail}MB[/color]"
+            )
+        except Exception as e:
+            self.mem_label.text = f"[color={T.RED_HEX}]内存读取失败: {e}[/color]"
+
+        # Battery
+        try:
+            level = self._run("cat /sys/class/power_supply/battery/capacity") or "N/A"
+            status = self._run("cat /sys/class/power_supply/battery/status") or "N/A"
+            temp = self._run("cat /sys/class/power_supply/battery/temp")
+            temp_s = f"{int(temp)/10:.1f}°C" if temp and temp.lstrip('-').isdigit() else "N/A"
+            c = G if level.isdigit() and int(level) > 30 else T.YELLOW_HEX if level.isdigit() and int(level) > 15 else T.RED_HEX
+            self.bat_label.text = (
+                f"[color={A}]━━ 电池 ━━[/color]\n"
+                f"电量: [color={c}]{level}%[/color]   状态: {status}   温度: {temp_s}"
+            )
+        except Exception as e:
+            self.bat_label.text = f"[color={T.RED_HEX}]电池读取失败: {e}[/color]"
+
+        # Disk
+        try:
+            st = os.statvfs("/data")
+            total_g = (st.f_blocks * st.f_frsize) / (1024 ** 3)
+            free_g = (st.f_bavail * st.f_frsize) / (1024 ** 3)
+            used_g = total_g - free_g
+            pct = (used_g / total_g * 100) if total_g else 0
+            c = self._color(pct)
+            self.disk_label.text = (
+                f"[color={A}]━━ 存储 ━━[/color]\n"
+                f"已用: [color={c}]{used_g:.1f}GB[/color] / {total_g:.1f}GB  "
+                f"([color={c}]{pct:.1f}%[/color])"
+            )
+        except Exception as e:
+            self.disk_label.text = f"[color={T.RED_HEX}]存储读取失败: {e}[/color]"
+
+        # Network
+        try:
+            rx = self._run("cat /sys/class/net/wlan0/statistics/rx_bytes")
+            tx = self._run("cat /sys/class/net/wlan0/statistics/tx_bytes")
+            ip = self._run("ip route get 1 2>/dev/null | awk '{print $7}' | head -1") or "N/A"
+            rx_mb = int(rx) / (1024 ** 2) if rx and rx.isdigit() else 0
+            tx_mb = int(tx) / (1024 ** 2) if tx and tx.isdigit() else 0
+            self.net_label.text = (
+                f"[color={A}]━━ 网络 ━━[/color]\n"
+                f"IP: [color={G}]{ip}[/color]\n"
+                f"↓ {rx_mb:.1f}MB   ↑ {tx_mb:.1f}MB"
+            )
+        except Exception as e:
+            self.net_label.text = f"[color={T.RED_HEX}]网络读取失败: {e}[/color]"
