@@ -127,15 +127,67 @@ class SystemMonitorTab(BoxLayout):
 
         # Network
         try:
-            rx = self._run("cat /sys/class/net/wlan0/statistics/rx_bytes")
-            tx = self._run("cat /sys/class/net/wlan0/statistics/tx_bytes")
-            ip = self._run("ip route get 1 2>/dev/null | awk '{print $7}' | head -1") or "N/A"
-            rx_mb = int(rx) / (1024 ** 2) if rx and rx.isdigit() else 0
-            tx_mb = int(tx) / (1024 ** 2) if tx and tx.isdigit() else 0
+            # ★ 用 Python socket 获取本机IP（最可靠，不依赖shell命令格式）
+            ip = "N/A"
+            try:
+                import socket
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.settimeout(2)
+                s.connect(("8.8.8.8", 80))
+                ip = s.getsockname()[0]
+                s.close()
+            except Exception:
+                # fallback 1: ip addr
+                ip = self._run(
+                    "ip -4 addr show 2>/dev/null | grep 'inet ' | grep -v '127.0.0.1' "
+                    "| awk '{print $2}' | cut -d/ -f1 | head -1"
+                ) or "N/A"
+                if ip == "N/A":
+                    # fallback 2: ifconfig
+                    ip = self._run(
+                        "ifconfig 2>/dev/null | grep 'inet addr' | grep -v '127.0.0.1' "
+                        "| awk '{print $2}' | cut -d: -f2 | head -1"
+                    ) or "N/A"
+
+            # ★ 动态检测活跃网卡，不硬编码 wlan0
+            rx_mb = 0
+            tx_mb = 0
+            iface = "N/A"
+            # 按优先级尝试：wlan0(WiFi) → rmnet_data0(4G) → 其他
+            for try_iface in ["wlan0", "rmnet_data0", "rmnet0", "eth0", "ccmni0"]:
+                rx_path = f"/sys/class/net/{try_iface}/statistics/rx_bytes"
+                if os.path.exists(rx_path):
+                    iface = try_iface
+                    rx = self._run(f"cat /sys/class/net/{try_iface}/statistics/rx_bytes")
+                    tx = self._run(f"cat /sys/class/net/{try_iface}/statistics/tx_bytes")
+                    rx_mb = int(rx) / (1024 ** 2) if rx and rx.isdigit() else 0
+                    tx_mb = int(tx) / (1024 ** 2) if tx and tx.isdigit() else 0
+                    break
+
+            # 如果上面都没找到，扫描 /sys/class/net/ 下所有网卡
+            if iface == "N/A":
+                try:
+                    for name in os.listdir("/sys/class/net/"):
+                        if name == "lo":
+                            continue
+                        rx_path = f"/sys/class/net/{name}/statistics/rx_bytes"
+                        if os.path.exists(rx_path):
+                            iface = name
+                            rx = self._run(f"cat {rx_path}")
+                            tx = self._run(f"cat /sys/class/net/{name}/statistics/tx_bytes")
+                            rx_mb = int(rx) / (1024 ** 2) if rx and rx.isdigit() else 0
+                            tx_mb = int(tx) / (1024 ** 2) if tx and tx.isdigit() else 0
+                            break
+                except Exception:
+                    pass
+
             self.net_label.text = (
                 f"[color={A}]━━ 网络 ━━[/color]\n"
                 f"IP: [color={G}]{ip}[/color]\n"
+                f"网卡: [color={G}]{iface}[/color]\n"
                 f"↓ {rx_mb:.1f}MB   ↑ {tx_mb:.1f}MB"
             )
+        except Exception as e:
+            self.net_label.text = f"[color={T.RED_HEX}]网络读取失败: {e}[/color]"
         except Exception as e:
             self.net_label.text = f"[color={T.RED_HEX}]网络读取失败: {e}[/color]"
