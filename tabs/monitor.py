@@ -3,7 +3,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.clock import Clock
 from kivy.metrics import dp
-import subprocess, os，socket
+import subprocess, os, socket
 import theme as T
 from widgets import StyledCard, StyledLabel, StyledButton
 
