@@ -1,0 +1,33 @@
+"""设置 - 背景/主题自定义"""
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.scrollview import ScrollView
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.button import Button
+from kivy.graphics import Color, RoundedRectangle
+from kivy.metrics import dp
+import os
+import theme as T
+from widgets import StyledCard, StyledLabel, StyledButton, StyledTextInput
+
+
+class SettingsTab(BoxLayout):
+    app = None  # main.py 会赋值
+
+    def __init__(self, **kwargs):
+        super().__init__(orientation="vertical", padding=dp(8), spacing=dp(8), **kwargs)
+
+        scroll = ScrollView()
+        self.content = BoxLayout(
+            orientation="vertical", size_hint_y=None, spacing=dp(10)
+        )
+        self.content.bind(minimum_height=self.content.setter("height"))
+
+        # ======= 背景色预设 =======
+        color_card = StyledCard(size_hint_y=None, height=dp(160))
+        color_card.add_widget(
+            StyledLabel(
+                text=f"[color={T.ACCENT_HEX}]🎨 背景颜色预设[/color]",
+                size_hint_y=None, height=dp(28), font_size=T.FONT_MD,
+            )
+        )
+        grid = GridLayout(cols=4, spacing=dp
