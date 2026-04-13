@@ -38,7 +38,7 @@ class MyMonitorApp(App):
             if name == "settings":
                 tab.app = self
             screen.add_widget(tab)
-            self.sm.add_screen(screen)
+            self.sm.add_widget(screen)
 
         self.bg.add_widget(self.sm)
 
